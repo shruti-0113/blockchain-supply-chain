@@ -1,0 +1,15 @@
+{
+  "name": "blockchain-supply-chain",
+  "version": "1.0.0",
+  "description": "Blockchain-based supply chain tracking system",
+  "scripts": {
+    "chain": "npm --prefix blockchain run node",
+    "deploy": "npm --prefix blockchain run deploy",
+    "backend": "npm --prefix backend start",
+    "frontend": "npm --prefix frontend run dev",
+    "dev": "node start.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

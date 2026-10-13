@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.dist/
+.env
+.env.*
+*.log
+npm-debug.log*
+
+# Hardhat
+blockchain/artifacts/
+blockchain/cache/
+blockchain/typechain-types/
