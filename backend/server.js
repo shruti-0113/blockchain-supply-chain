@@ -119,12 +119,9 @@ function serializeCheckpoint(raw) {
 async function fetchItems() {
   const c = readContract();
   const count = Number(await c.itemCount());
-  const items = [];
-  for (let i = 1; i <= count; i++) {
-    const raw = await c.getItem(i);
-    if (raw[14]) items.push(serializeItem(raw));
-  }
-  return items;
+  if (count === 0) return [];
+  const raws = await Promise.all(Array.from({ length: count }, (_, i) => c.getItem(i + 1)));
+  return raws.filter((raw) => raw[14]).map(serializeItem);
 }
 
 async function fetchItem(id) {
@@ -553,13 +550,13 @@ app.get('/carbon', async (req, res) => {
     let totalKg = 0;
     let totalKm = 0;
     const perItem = [];
-    for (const item of items) {
-      const cps = await fetchCheckpoints(item.id);
-      const carbon = computeCarbon(cps);
+    const all = await Promise.all(items.map((item) => fetchCheckpoints(item.id)));
+    items.forEach((item, i) => {
+      const carbon = computeCarbon(all[i]);
       totalKg += carbon.totalKg;
       totalKm += carbon.totalKm;
       perItem.push({ id: item.id, name: item.name, ...carbon });
-    }
+    });
     res.json({ totalKg: round(totalKg), totalKm: round(totalKm), perItem });
   } catch (e) {
     fail(res, e, 500);
@@ -611,11 +608,12 @@ app.get('/items/:id/authenticity', async (req, res) => {
 app.get('/authenticity', async (req, res) => {
   try {
     const items = await fetchItems();
-    const out = [];
-    for (const item of items) {
-      const cps = await fetchCheckpoints(item.id);
-      out.push({ item, scans: computeScans(cps), carbon: computeCarbon(cps) });
-    }
+    const all = await Promise.all(items.map((item) => fetchCheckpoints(item.id)));
+    const out = items.map((item, i) => ({
+      item,
+      scans: computeScans(all[i]),
+      carbon: computeCarbon(all[i])
+    }));
     const suspicious = out.filter((o) => o.scans.suspicious);
     res.json({ items: out, suspiciousCount: suspicious.length });
   } catch (e) {
@@ -694,11 +692,8 @@ app.get('/items/:id/prediction', async (req, res) => {
 app.get('/predictions', async (req, res) => {
   try {
     const items = await fetchItems();
-    const out = [];
-    for (const item of items) {
-      const cps = await fetchCheckpoints(item.id);
-      out.push({ item, prediction: computePrediction(item, cps, items) });
-    }
+    const all = await Promise.all(items.map((item) => fetchCheckpoints(item.id)));
+    const out = items.map((item, i) => ({ item, prediction: computePrediction(item, all[i], items) }));
     out.sort((a, b) => b.prediction.riskScore - a.prediction.riskScore);
     res.json({ predictions: out });
   } catch (e) {
@@ -790,23 +785,23 @@ app.get('/items/:id/passport', async (req, res) => {
 app.get('/overview', async (req, res) => {
   try {
     const items = await fetchItems();
-    const c = readContract();
+    const all = await Promise.all(items.map((item) => fetchCheckpoints(item.id)));
     let totalCheckpoints = 0;
     let alerts = 0;
     let highRisk = 0;
     let suspicious = 0;
     const byState = [0, 0, 0, 0, 0];
     const activity = [];
-    for (const item of items) {
+    items.forEach((item, i) => {
+      const cps = all[i];
       byState[item.state]++;
-      const cps = await fetchCheckpoints(item.id);
       totalCheckpoints += cps.length;
       const temp = computeTemperature(item, cps);
       alerts += temp.alertCount;
       if (computeScans(cps).suspicious) suspicious++;
       if (computePrediction(item, cps, items).level === 'High') highRisk++;
       cps.slice(-3).forEach((cp) => activity.push({ id: item.id, name: item.name, ...cp }));
-    }
+    });
     activity.sort((a, b) => b.timestamp - a.timestamp);
     res.json({
       itemCount: items.length,
@@ -845,8 +840,12 @@ async function bootstrapRoles() {
   }
 }
 
-app.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Contract: ${CONTRACT_ADDRESS}`);
-  await bootstrapRoles();
-});
+module.exports = app;
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Contract: ${CONTRACT_ADDRESS}`);
+    await bootstrapRoles();
+  });
+}

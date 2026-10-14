@@ -4,8 +4,10 @@ build/
 .dist/
 .env
 .env.*
+!.env.example
 *.log
 npm-debug.log*
+.vercel
 
 # Hardhat
 blockchain/artifacts/

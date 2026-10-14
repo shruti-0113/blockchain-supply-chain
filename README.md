@@ -124,6 +124,55 @@ blockchain-supply-chain/
 └── package.json
 ```
 
+## Deploying to Vercel (Sepolia)
+
+A local Hardhat node can't run on Vercel, so the deployed app uses the **Sepolia
+testnet**. This project deploys as **two Vercel projects** (both auto-detected):
+
+- `backend/` → Express API (Vercel Function)
+- `frontend/` → Vite site, pointed at the backend URL via `VITE_API_URL`
+
+### 1. Create a funded Sepolia account
+
+1. Copy `blockchain/.env.example` to `blockchain/.env` and set a `MNEMONIC`
+   (any 12-word phrase) and `DEPLOYER_PRIVATE_KEY` = private key of **index 0**.
+2. Get the deployer address and top it up with Sepolia ETH from a faucet
+   (e.g. https://sepolia-faucet.pk910.de).
+3. Set `SEPOLIA_RPC_URL` (defaults to a public RPC; an Alchemy/Infura key is
+   more reliable).
+
+### 2. Deploy the contract and fund the actors
+
+```bash
+npm --prefix blockchain run deploy:sepolia   # deploys + assigns actor roles
+npm --prefix blockchain run fund:sepolia     # sends gas ETH to actors 1..6
+```
+
+The deploy prints the contract address and updates `backend/.env` and
+`frontend/src/contract.js`.
+
+### 3. Deploy the backend
+
+```bash
+cd backend
+vercel
+vercel env add RPC_URL            # your Sepolia RPC
+vercel env add CONTRACT_ADDRESS   # from step 2
+vercel env add MNEMONIC           # same mnemonic as above
+vercel --prod
+```
+
+### 4. Deploy the frontend
+
+```bash
+cd frontend
+vercel
+vercel env add VITE_API_URL       # https://<your-backend>.vercel.app
+vercel --prod
+```
+
+Open the frontend URL — it now reads and writes to the Sepolia contract.
+
 ## License
 
 MIT
